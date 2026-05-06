@@ -14,10 +14,12 @@ logger = logging.getLogger(__name__)
 
 class AlertEvaluationWorker:
     def __init__(self) -> None:
+        """Initialize the background worker state."""
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
 
     def start(self) -> None:
+        """Start the alert evaluation loop unless disabled or already running."""
         if settings.app_env == "test" or self._task is not None:
             return
         self._task = asyncio.create_task(self._run(), name="alert-evaluation-worker")
@@ -27,6 +29,7 @@ class AlertEvaluationWorker:
         )
 
     async def stop(self) -> None:
+        """Stop the alert evaluation loop and wait for cancellation."""
         if self._task is None:
             return
         self._stop_event.set()
@@ -37,6 +40,7 @@ class AlertEvaluationWorker:
         logger.info("automatic alert evaluation worker stopped")
 
     async def _run(self) -> None:
+        """Run alert evaluation periodically until the worker is stopped."""
         while not self._stop_event.is_set():
             try:
                 started_at = datetime.now(timezone.utc)

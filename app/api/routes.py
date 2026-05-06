@@ -27,21 +27,25 @@ router = APIRouter()
 
 @router.get("/health", tags=["system"])
 async def health() -> dict[str, str]:
+    """Return the API health status."""
     return {"status": "ok"}
 
 
 @router.get("/users", response_model=list[UserRead], tags=["users"])
 async def users(session: AsyncSession = Depends(get_session)) -> list[User]:
+    """List registered users ordered by name."""
     return list((await session.scalars(select(User).order_by(User.name.asc()))).all())
 
 
 @router.get("/fields", response_model=list[FieldRead], tags=["fields"])
 async def fields(session: AsyncSession = Depends(get_session)) -> list[Field]:
+    """List registered agricultural fields ordered by name."""
     return list((await session.scalars(select(Field).order_by(Field.name.asc()))).all())
 
 
 @router.get("/weather-events", response_model=list[WeatherEventRead], tags=["weather"])
 async def weather_events(session: AsyncSession = Depends(get_session)) -> list:
+    """List stored weather events ordered by event date."""
     return await list_weather_events(session)
 
 
@@ -52,6 +56,7 @@ async def weather_events(session: AsyncSession = Depends(get_session)) -> list:
     tags=["weather"],
 )
 async def post_weather_event(payload: WeatherEventCreate, session: AsyncSession = Depends(get_session)):
+    """Create a weather event or return the existing idempotent match."""
     try:
         return await create_weather_event(session, payload)
     except ValueError as exc:
@@ -63,11 +68,13 @@ async def alerts(
     active: Optional[bool] = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ):
+    """List alert rules, optionally filtered by active status."""
     return await list_alert_rules(session, active=active)
 
 
 @router.post("/alerts", response_model=AlertRuleRead, status_code=status.HTTP_201_CREATED, tags=["alerts"])
 async def post_alert(payload: AlertRuleCreate, session: AsyncSession = Depends(get_session)):
+    """Create an alert rule for a user-owned field."""
     try:
         return await create_alert_rule(session, payload)
     except ValueError as exc:
@@ -76,6 +83,7 @@ async def post_alert(payload: AlertRuleCreate, session: AsyncSession = Depends(g
 
 @router.patch("/alerts/{alert_rule_id}", response_model=AlertRuleRead, tags=["alerts"])
 async def patch_alert(alert_rule_id: UUID, payload: AlertRuleUpdate, session: AsyncSession = Depends(get_session)):
+    """Apply a partial update to an alert rule."""
     alert_rule = await update_alert_rule(session, alert_rule_id, payload)
     if alert_rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="alert rule not found")
@@ -84,6 +92,7 @@ async def patch_alert(alert_rule_id: UUID, payload: AlertRuleUpdate, session: As
 
 @router.post("/alerts/evaluate", response_model=EvaluationResult, tags=["alerts"])
 async def run_alert_evaluation(session: AsyncSession = Depends(get_session)) -> EvaluationResult:
+    """Run alert evaluation immediately and report created notifications."""
     return EvaluationResult(created_notifications=await evaluate_alerts(session))
 
 
@@ -92,6 +101,7 @@ async def notifications(
     user_id: Optional[UUID] = None,
     session: AsyncSession = Depends(get_session),
 ) -> list[Notification]:
+    """List notifications, optionally scoped to one user."""
     stmt = select(Notification).order_by(Notification.sent_at.desc())
     if user_id is not None:
         stmt = stmt.where(Notification.user_id == user_id)
@@ -100,6 +110,7 @@ async def notifications(
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationRead, tags=["notifications"])
 async def mark_notification_read(notification_id: UUID, session: AsyncSession = Depends(get_session)):
+    """Mark a notification as read."""
     stmt = (
         update(Notification)
         .where(Notification.id == notification_id)

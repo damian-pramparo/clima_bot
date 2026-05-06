@@ -16,6 +16,7 @@ class WeatherEventCreate(BaseModel):
     @field_validator("event_date")
     @classmethod
     def ensure_timezone(cls, value: datetime) -> datetime:
+        """Assume UTC when an incoming event datetime has no timezone."""
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value

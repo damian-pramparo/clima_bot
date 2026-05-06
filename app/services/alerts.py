@@ -18,6 +18,7 @@ from app.schemas.alert_rule import AlertRuleCreate, AlertRuleUpdate
 
 
 async def list_alert_rules(session: AsyncSession, active: Optional[bool] = None) -> list[AlertRule]:
+    """Return alert rules ordered by creation date, optionally filtered by status."""
     stmt: Select[tuple[AlertRule]] = select(AlertRule).order_by(AlertRule.created_at.desc())
     if active is not None:
         stmt = stmt.where(AlertRule.active.is_(active))
@@ -25,6 +26,7 @@ async def list_alert_rules(session: AsyncSession, active: Optional[bool] = None)
 
 
 async def create_alert_rule(session: AsyncSession, payload: AlertRuleCreate) -> AlertRule:
+    """Create an alert rule after validating field ownership."""
     field = await session.get(Field, payload.field_id)
     if field is None or field.user_id != payload.user_id:
         raise ValueError("field_id does not belong to user_id")
@@ -48,6 +50,7 @@ async def create_alert_rule(session: AsyncSession, payload: AlertRuleCreate) -> 
 
 
 async def _get_existing_alert_rule(session: AsyncSession, payload: AlertRuleCreate) -> AlertRule | None:
+    """Find an existing alert rule for the same user, field, and event type."""
     stmt = select(AlertRule).where(
         AlertRule.user_id == payload.user_id,
         AlertRule.field_id == payload.field_id,
@@ -57,6 +60,7 @@ async def _get_existing_alert_rule(session: AsyncSession, payload: AlertRuleCrea
 
 
 async def update_alert_rule(session: AsyncSession, alert_rule_id: UUID, payload: AlertRuleUpdate) -> Optional[AlertRule]:
+    """Update mutable alert rule fields and return the updated rule."""
     values = payload.model_dump(exclude_unset=True)
     if not values:
         return await session.get(AlertRule, alert_rule_id)
@@ -73,6 +77,7 @@ async def update_alert_rule(session: AsyncSession, alert_rule_id: UUID, payload:
 
 
 async def evaluate_alerts(session: AsyncSession) -> int:
+    """Create notifications for future weather events that match active alert rules."""
     stmt = (
         select(AlertRule, WeatherEvent)
         .join(WeatherEvent, WeatherEvent.field_id == AlertRule.field_id)

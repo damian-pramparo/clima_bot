@@ -5,13 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/alertas_climaticas",
+    database_url: str = Field(  
         validation_alias="DATABASE_URL",
     )
-    app_env: str = Field(default="development", validation_alias="APP_ENV")
+    app_env: str = Field(validation_alias="APP_ENV")
     alert_evaluation_interval_seconds: int = Field(
-        default=60,
         ge=5,
         validation_alias="ALERT_EVALUATION_INTERVAL_SECONDS",
     )
@@ -21,6 +19,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Load and cache application settings from the environment."""
     return Settings()
 
 

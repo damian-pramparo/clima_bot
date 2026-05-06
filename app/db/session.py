@@ -9,5 +9,6 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """Yield an async database session for request-scoped work."""
     async with SessionLocal() as session:
         yield session

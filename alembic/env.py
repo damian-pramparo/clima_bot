@@ -22,6 +22,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    """Run migrations without opening a database connection."""
     context.configure(
         url=settings.database_url,
         target_metadata=target_metadata,
@@ -33,12 +34,14 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    """Run migrations using an existing synchronous connection."""
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_async_migrations() -> None:
+    """Create an async engine and run migrations through Alembic."""
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

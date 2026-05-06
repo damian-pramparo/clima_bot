@@ -17,6 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """Convert weather event dates to timezone-aware datetimes."""
     op.alter_column(
         "weather_events",
         "event_date",
@@ -28,6 +29,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Convert weather event datetimes back to dates."""
     op.alter_column(
         "weather_events",
         "event_date",

@@ -35,6 +35,7 @@ notification_status = postgresql.ENUM(
 
 
 def upgrade() -> None:
+    """Create the initial alerting schema and enum types."""
     weather_event_type.create(op.get_bind(), checkfirst=True)
     notification_status.create(op.get_bind(), checkfirst=True)
 
@@ -125,6 +126,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Drop the alerting schema and enum types."""
     op.drop_index(op.f("ix_notifications_weather_event_id"), table_name="notifications")
     op.drop_index(op.f("ix_notifications_user_id"), table_name="notifications")
     op.drop_index(op.f("ix_notifications_status"), table_name="notifications")

@@ -16,6 +16,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """Seed deterministic users, fields, alert rules, and weather events."""
     op.execute(
         """
         INSERT INTO users (id, phone_number, name)
@@ -57,6 +58,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Remove the deterministic mock seed data."""
     op.execute(
         """
         DELETE FROM notifications

@@ -10,6 +10,7 @@ from app.schemas.weather_event import WeatherEventCreate
 
 
 async def create_weather_event(session: AsyncSession, payload: WeatherEventCreate) -> WeatherEvent:
+    """Create a weather event or return the existing duplicate-safe record."""
     field = await session.get(Field, payload.field_id)
     if field is None:
         raise ValueError("field_id does not exist")
@@ -33,6 +34,7 @@ async def create_weather_event(session: AsyncSession, payload: WeatherEventCreat
 
 
 async def _get_existing_weather_event(session: AsyncSession, payload: WeatherEventCreate) -> WeatherEvent | None:
+    """Find an existing weather event by field, datetime, and event type."""
     stmt = select(WeatherEvent).where(
         WeatherEvent.field_id == payload.field_id,
         WeatherEvent.event_date == payload.event_date,
@@ -42,5 +44,6 @@ async def _get_existing_weather_event(session: AsyncSession, payload: WeatherEve
 
 
 async def list_weather_events(session: AsyncSession) -> list[WeatherEvent]:
+    """Return weather events ordered chronologically and by type."""
     stmt = select(WeatherEvent).order_by(WeatherEvent.event_date.asc(), WeatherEvent.event_type.asc())
     return list((await session.scalars(stmt)).all())

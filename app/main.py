@@ -15,6 +15,7 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start and stop background services with the FastAPI lifespan."""
     worker.start()
     yield
     await worker.stop()
