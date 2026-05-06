@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import DomainError
 from app.models.field import Field
 from app.models.weather_event import WeatherEvent
 from app.schemas.weather_event import WeatherEventCreate
@@ -13,7 +14,7 @@ async def create_weather_event(session: AsyncSession, payload: WeatherEventCreat
     """Create a weather event or return the existing duplicate-safe record."""
     field = await session.get(Field, payload.field_id)
     if field is None:
-        raise ValueError("field_id does not exist")
+        raise DomainError("field_id does not exist")
 
     existing_event = await _get_existing_weather_event(session, payload)
     if existing_event is not None:

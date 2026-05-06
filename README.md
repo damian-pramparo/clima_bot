@@ -29,6 +29,7 @@ El contenedor de la API instala dependencias con `uv sync --frozen --no-dev` y e
 ## Endpoints principales
 
 - `GET /health`
+- `GET /health/db`
 - `GET /users`
 - `GET /fields`
 - `GET /weather-events`
@@ -57,11 +58,18 @@ docker logs alertas_climaticas_bot-api-1
 y
 ```bash
 curl http://localhost:8000/health
+curl http://localhost:8000/health/db
 ```
-Para conocer si esta saludable el endpoint, si todo levanto OK, deberia respondernos
+Para conocer si esta saludable el servicio, si todo levanto OK, deberia respondernos
 
 ```json
 {"status":"ok"}
+```
+
+El endpoint `/health/db` tambien ejecuta una consulta liviana contra la base y responde:
+
+```json
+{"status":"ok","database":"ok"}
 ```
 
 ### 2. Ver datos iniciales cargados por migracion
@@ -241,6 +249,7 @@ Las migraciones incluidas son:
 
 - `0001_create_alerting_schema.py`: tablas, indices, constraints y enums.
 - `0002_seed_mock_weather_data.py`: datos iniciales mock para simular el job de ingesta meteorologica existente.
+- `0003_weather_events_datetime.py`: convierte `event_date` a timestamp con timezone.
 
 ## Tests
 
@@ -250,14 +259,19 @@ uv run pytest
 ```
 
 Los tests validan la salud de la API y la evaluacion idempotente de alertas.
+Tambien cubren validaciones de payload, ownership de campos, duplicados idempotentes, filtro de notificaciones por usuario y marcado de notificaciones como leidas.
 
 ## Decisiones tecnicas
 
+- La aplicacion usa FastAPI con SQLAlchemy 2 async y `asyncpg` para que las operaciones de I/O contra PostgreSQL no bloqueen el event loop.
 - El modelo separa `weather_events` de `alert_rules` y `notifications`. Esto mantiene la ingesta meteorologica desacoplada de la evaluacion de alertas.
 - `notifications` tiene constraint unico por `alert_rule_id` y `weather_event_id`, evitando duplicados aunque el job corra varias veces.
 - `weather_events` es idempotente por `field_id`, `event_date` y `event_type`: repetir el mismo evento devuelve el existente. `event_date` guarda fecha y hora, por lo que dos eventos del mismo tipo en el mismo campo pueden coexistir si ocurren en horarios distintos.
 - `alert_rules` es idempotente por `user_id`, `field_id` y `event_type`: repetir la misma regla devuelve la existente.
-- Ante carreras concurrentes, PostgreSQL sigue siendo la fuente de verdad con constraints unicos; los servicios capturan `IntegrityError`, hacen `rollback` y devuelven el registro existente cuando corresponde.
+- La evaluacion de alertas inserta notificaciones con `ON CONFLICT DO NOTHING` sobre el par regla/evento. Asi el endpoint manual y el background job pueden correr mas de una vez sin duplicar notificaciones.
+- PostgreSQL sigue siendo la fuente de verdad con constraints unicos; los servicios capturan `IntegrityError`, hacen `rollback` y devuelven el registro existente cuando corresponde en altas idempotentes.
+- Los errores de dominio usan una excepcion propia y un handler global de FastAPI para devolver `422` de forma consistente sin repetir `try/except` en cada endpoint.
 - El job corre dentro del lifespan de FastAPI para el ejercicio. En produccion real lo moveria a un worker separado, manteniendo el mismo servicio `evaluate_alerts`.
 - Las probabilidades y umbrales se validan con constraints de DB y Pydantic entre `0` y `100`.
 - El endpoint `POST /alerts/evaluate` existe para operar y probar manualmente el job sin esperar el intervalo periodico.
+- No se implementa integracion con WhatsApp porque el challenge indica que no hace falta; las notificaciones quedan persistidas y consultables por API.

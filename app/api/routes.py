@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -29,6 +29,13 @@ router = APIRouter()
 async def health() -> dict[str, str]:
     """Return the API health status."""
     return {"status": "ok"}
+
+
+@router.get("/health/db", tags=["system"])
+async def health_db(session: AsyncSession = Depends(get_session)) -> dict[str, str]:
+    """Return database connectivity status."""
+    await session.execute(text("SELECT 1"))
+    return {"status": "ok", "database": "ok"}
 
 
 @router.get("/users", response_model=list[UserRead], tags=["users"])
@@ -57,10 +64,7 @@ async def weather_events(session: AsyncSession = Depends(get_session)) -> list:
 )
 async def post_weather_event(payload: WeatherEventCreate, session: AsyncSession = Depends(get_session)):
     """Create a weather event or return the existing idempotent match."""
-    try:
-        return await create_weather_event(session, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return await create_weather_event(session, payload)
 
 
 @router.get("/alerts", response_model=list[AlertRuleRead], tags=["alerts"])
@@ -75,10 +79,7 @@ async def alerts(
 @router.post("/alerts", response_model=AlertRuleRead, status_code=status.HTTP_201_CREATED, tags=["alerts"])
 async def post_alert(payload: AlertRuleCreate, session: AsyncSession = Depends(get_session)):
     """Create an alert rule for a user-owned field."""
-    try:
-        return await create_alert_rule(session, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return await create_alert_rule(session, payload)
 
 
 @router.patch("/alerts/{alert_rule_id}", response_model=AlertRuleRead, tags=["alerts"])

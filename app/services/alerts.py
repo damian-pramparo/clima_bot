@@ -5,10 +5,13 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import Select, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.errors import DomainError
 from app.models.alert_rule import AlertRule
 from app.models.enums import NotificationStatus
 from app.models.field import Field
@@ -29,7 +32,7 @@ async def create_alert_rule(session: AsyncSession, payload: AlertRuleCreate) -> 
     """Create an alert rule after validating field ownership."""
     field = await session.get(Field, payload.field_id)
     if field is None or field.user_id != payload.user_id:
-        raise ValueError("field_id does not belong to user_id")
+        raise DomainError("field_id does not belong to user_id")
 
     existing_alert_rule = await _get_existing_alert_rule(session, payload)
     if existing_alert_rule is not None:
@@ -98,27 +101,31 @@ async def evaluate_alerts(session: AsyncSession) -> int:
             f"{weather_event.event_type.value} con probabilidad {weather_event.probability}% "
             f"el {weather_event.event_date.isoformat()} supera el umbral {alert_rule.threshold}%."
         )
-        exists_stmt = select(Notification.id).where(
-            Notification.alert_rule_id == alert_rule.id,
-            Notification.weather_event_id == weather_event.id,
+        created += await _insert_notification_once(
+            session,
+            {
+                "user_id": alert_rule.user_id,
+                "field_id": alert_rule.field_id,
+                "alert_rule_id": alert_rule.id,
+                "weather_event_id": weather_event.id,
+                "status": NotificationStatus.SENT,
+                "message": message,
+            },
         )
-        if (await session.scalar(exists_stmt)) is not None:
-            continue
-        session.add(
-            Notification(
-                user_id=alert_rule.user_id,
-                field_id=alert_rule.field_id,
-                alert_rule_id=alert_rule.id,
-                weather_event_id=weather_event.id,
-                status=NotificationStatus.SENT,
-                message=message,
-            )
-        )
-        created += 1
-
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        return await evaluate_alerts(session)
+    await session.commit()
     return created
+
+
+async def _insert_notification_once(session: AsyncSession, values: dict) -> int:
+    """Insert one notification and ignore duplicate rule/event pairs atomically."""
+    dialect_name = session.get_bind().dialect.name
+    insert_factory = sqlite_insert if dialect_name == "sqlite" else postgresql_insert
+    stmt = (
+        insert_factory(Notification)
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=[Notification.alert_rule_id, Notification.weather_event_id],
+        )
+    )
+    result = await session.execute(stmt)
+    return 1 if result.rowcount == 1 else 0
